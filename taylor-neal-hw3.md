@@ -81,11 +81,11 @@ well as the deeper trees at modeling our training set.
 In the case of gradient-boosted trees, we assumed a Gaussian
 distribution. Additional parameters included an interaction depth of 4,
 500 trees, and a shrinkage factor of 0.03. This resulted in an
-improvement of RMSE (43.788) of the gradient-boosted tree model when
-compared to the final pruned CART tree (with RMSE of 44.125). However,
+improvement of RMSE (43.79) of the gradient-boosted tree model when
+compared to the final pruned CART tree (with RMSE of 44.12). However,
 the “out-of-the-box” random forest (with 500 trees and the square root
 of the number of variables used as the number of randomly sampled
-variables) had the lowest RMSE (43.658) when tested against the 20% of
+variables) had the lowest RMSE (43.66) when tested against the 20% of
 our observations which were withheld for model building purposes. The
 plot above shows the random forest’s partial dependence plot for
 specific humidity.
@@ -119,4 +119,45 @@ TBU
 
 ## 4) Predictive Model Building: California Housing
 
-TBU
+In the following exercise, we seek to build a predictive model for
+median house value in a census tract. To begin, `totalRooms` and
+`totalBedrooms` were standardized by household (resulting in
+`rooms_per_household` and `bedrooms_per_household`, respectively).
+Additionally, a new factor was created by dividing tract population by
+number of households to arrive at an average household size
+(`avg_household`). 20% of the tract observations were withheld from the
+training and model building processes in order to test and estimate
+out-of-sample accuracy.
+
+<img src="taylor-neal-hw3_files/figure-gfm/HouseValue-maps-1.png" width="50%" /><img src="taylor-neal-hw3_files/figure-gfm/HouseValue-maps-2.png" width="50%" />
+
+In the figure above (on the left), we see `medianHouseValue` plotted as
+a color scale on a map of California and its counties. As we might
+expect, tracts with higher median house values are concentrated on the
+coast and near cities. Additionally, in the figure on the right, we find
+predicted median house values based on our final model plotted on the
+same map of California. While not identical, the predicted values do
+appear to map similarly to the actual data when plotted geographically.
+The final model we utilize to obtain these predictions is a random
+forest with 200 trees and 3 randomly sampled variables per tree.
+`medianHouseValue` is modeled based on `housingMedianAge`,
+`medianIncome`, `rooms_per_household`, `bedrooms_per_household`,
+`avg_household`, and `population`. The resulting model had an
+out-of-sample RMSE of 63,790. For benchmarking, a step-wise selected
+linear model was also fit (with the same explanatory variables as above
+for the random forest and in the space of all pairwise interactions).
+This resulted in an out-of-sample RMSE of 77,637.
+
+<img src="taylor-neal-hw3_files/figure-gfm/residuals-map-1.png" style="display: block; margin: auto;" />
+
+The figure above displays residuals/errors (actual values minus
+predictions) for the random forest predicted median house values. Values
+close to zero show up as grey so they blend into the background of the
+map. The model appears to do fairly well for most census tracts. As we
+might expect, when the model is undervaluing a given tract, it tends to
+be along the coast or near a city. And the model overvalues a fair
+amount of tracts in central California. Attempts were made to improve
+the model by calculating distance between census tract centroids to
+utilize the median value of nearby neighbors in predictions, but those
+attempts ran into computation constraints when calculating distances
+between all 20,000+ census tracts in California.

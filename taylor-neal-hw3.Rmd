@@ -12,6 +12,7 @@ library(rsample)
 library(modelr)
 library(randomForest)
 library(gbm)
+library(ggmap)
 #library(knitr)
 #library(caret)
 #library(glmnet)
@@ -101,7 +102,7 @@ partialPlot(load.forest, dengue_test, 'specific_humidity', las = 1)
 
 ```
 
-In the case of gradient-boosted trees, we assumed a Gaussian distribution. Additional parameters included an interaction depth of 4, 500 trees, and a shrinkage factor of 0.03. This resulted in an improvement of RMSE (`r round(boosted_rmse, 3)`) of the gradient-boosted tree model when compared to the final pruned CART tree (with RMSE of `r round(CART_rmse, 3)`). However, the "out-of-the-box" random forest (with 500 trees and the square root of the number of variables used as the number of randomly sampled variables) had the lowest RMSE (`r round(forest_rmse, 3)`) when tested against the 20% of our observations which were withheld for model building purposes. The plot above shows the random forest's partial dependence plot for specific humidity. 
+In the case of gradient-boosted trees, we assumed a Gaussian distribution. Additional parameters included an interaction depth of 4, 500 trees, and a shrinkage factor of 0.03. This resulted in an improvement of RMSE (`r round(boosted_rmse, 2)`) of the gradient-boosted tree model when compared to the final pruned CART tree (with RMSE of `r round(CART_rmse, 2)`). However, the "out-of-the-box" random forest (with 500 trees and the square root of the number of variables used as the number of randomly sampled variables) had the lowest RMSE (`r round(forest_rmse, 2)`) when tested against the 20% of our observations which were withheld for model building purposes. The plot above shows the random forest's partial dependence plot for specific humidity. 
 
 ```{r partial-precipitation, echo = FALSE, fig.align = 'center'}
 
@@ -125,4 +126,69 @@ TBU
 
 ## 4) Predictive Model Building: California Housing
 
-TBU
+In the following exercise, we seek to build a predictive model for median house value in a census tract. To begin, `totalRooms` and `totalBedrooms` were standardized by household (resulting in `rooms_per_household` and `bedrooms_per_household`, respectively). Additionally, a new factor was created by dividing tract population by number of households to arrive at an average household size (`avg_household`). 20% of the tract observations were withheld from the training and model building processes in order to test and estimate out-of-sample accuracy. 
+
+```{r HouseValue-maps, echo = FALSE, fig.show="hold", out.width="50%"}
+
+CA_housing = CA_housing %>% 
+  mutate(group = 1, rooms_per_household = totalRooms / households,
+         bedrooms_per_household = totalBedrooms / households, 
+         avg_household = population / households)
+
+states = map_data("state")
+counties = map_data("county")
+ca_map = subset(states, region == "california")
+ca_counties = subset(counties, region == "california")
+
+ca_base = ggplot(data = ca_map, mapping = aes(x = long, y = lat, group = group)) + 
+  coord_fixed(1.3) + geom_polygon(color = "black", fill = "gray") + 
+  theme_nothing() + 
+  geom_polygon(data = ca_counties, fill = NA, color = "white") +
+  geom_polygon(color = "black", fill = NA)
+
+ca_base + geom_point(data = CA_housing, size = .75, mapping = 
+                       aes(x = longitude, y = latitude, color = medianHouseValue)) + 
+  scale_color_gradient(low = "cyan", high = "dark blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+CA_split = initial_split(CA_housing, prop = 0.8)
+CA_train = training(CA_split)
+CA_test = testing(CA_split)
+
+lm_start = lm(medianHouseValue ~ housingMedianAge + medianIncome
+              + rooms_per_household + bedrooms_per_household
+              + avg_household + population, data = CA_train)
+
+lm_step = step(lm_start, scope = ~(.)^2, trace = 0)
+
+lm_rmse = modelr::rmse(lm_step, CA_test)
+
+ca.forest = randomForest(medianHouseValue ~ housingMedianAge + medianIncome
+                         + rooms_per_household + bedrooms_per_household
+                         + avg_household + population, mtry = 3, ntree = 200,
+                           data = CA_train, importance = TRUE)
+
+rf_rmse = modelr::rmse(ca.forest, CA_test)
+
+CA_housing$PredictedMedianValue = predict(ca.forest, CA_housing)
+CA_housing = CA_housing %>% mutate(Residuals = medianHouseValue - PredictedMedianValue)
+
+ca_base + geom_point(data = CA_housing, size = .75, mapping = 
+                       aes(x = longitude, y = latitude, color = PredictedMedianValue)) + 
+  scale_color_gradient(low = "cyan", high = "dark blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+```
+
+In the figure above (on the left), we see `medianHouseValue` plotted as a color scale on a map of California and its counties. As we might expect, tracts with higher median house values are concentrated on the coast and near cities. Additionally, in the figure on the right, we find predicted median house values based on our final model plotted on the same map of California. While not identical, the predicted values do appear to map similarly to the actual data when plotted geographically. The final model we utilize to obtain these predictions is a random forest with 200 trees and 3 randomly sampled variables per tree. `medianHouseValue` is modeled based on `housingMedianAge`, `medianIncome`, `rooms_per_household`, `bedrooms_per_household`, `avg_household`, and `population`. The resulting model had an out-of-sample RMSE of `r format(round(rf_rmse, 0), nsmall = 0, big.mark = ",")`. For benchmarking, a step-wise selected linear model was also fit (with the same explanatory variables as above for the random forest and in the space of all pairwise interactions). This resulted in an out-of-sample RMSE of `r format(lm_rmse, nsmall = 0, big.mark = ",")`.
+
+```{r residuals-map, echo = FALSE, fig.align = 'center'}
+
+ca_base + geom_point(data = CA_housing, size = 1, mapping = 
+                       aes(x = longitude, y = latitude, color = Residuals)) + 
+  scale_color_gradient2(low = "red", mid = "grey", high = "blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+```
+
+The figure above displays residuals/errors (actual values minus predictions) for the random forest predicted median house values. Values close to zero show up as grey so they blend into the background of the map. The model appears to do fairly well for most census tracts. As we might expect, when the model is undervaluing a given tract, it tends to be along the coast or near a city. And the model overvalues a fair amount of tracts in central California. Attempts were made to improve the model by calculating distance between census tract centroids to utilize the median value of nearby neighbors in predictions, but those attempts ran into computation constraints when calculating distances between all 20,000+ census tracts in California. 

@@ -6,6 +6,8 @@ library(modelr)
 library(randomForest)
 library(gbm)
 
+
+### Prob 2 ###
 dengue <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-3/master/data/dengue.csv", header = TRUE)
 
 dengue$city = as.factor(dengue$city)
@@ -46,7 +48,7 @@ rpart.plot(load.tree_pruned, digits = -5, type = 4, extra = 1)
 
 
 
-### Forest
+#### Forest
 load.forest = randomForest(total_cases ~ city + season + tdtr_k + specific_humidity + precipitation_amt + max_air_temp_k,
                            data = dengue_train, importance = TRUE, na.action = na.roughfix)
 
@@ -56,7 +58,7 @@ load.forest = randomForest(total_cases ~ city + season + tdtr_k + specific_humid
 #modelr::rmse(load.forest, dengue_test)
 
 
-### Boosting
+#### Boosting
 
 boost = gbm(total_cases ~ city + season + tdtr_k + specific_humidity + precipitation_amt + max_air_temp_k, 
              data = dengue_train,
@@ -75,3 +77,72 @@ partialPlot(load.forest, dengue_test, 'max_air_temp_k', las = 1)
 #plot(boost, 'specific_humidity')
 #plot(boost, 'precipitation_amt')
 #plot(boost, 'max_air_temp_k')
+
+
+### Prob 4 ###
+CA_housing <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-3/master/data/CAhousing.csv", header = TRUE)
+
+CA_housing = CA_housing %>% 
+  mutate(group = 1, rooms_per_household = totalRooms / households,
+         bedrooms_per_household = totalBedrooms / households, 
+         avg_household = population / households)
+
+#library(maps)
+library(ggmap)
+#library(sf)
+
+states = map_data("state")
+counties = map_data("county")
+ca_map = subset(states, region == "california")
+ca_counties = subset(counties, region == "california")
+
+ca_base = ggplot(data = ca_map, mapping = aes(x = long, y = lat, group = group)) + 
+  coord_fixed(1.3) + geom_polygon(color = "black", fill = "gray") + 
+  theme_nothing() + 
+  geom_polygon(data = ca_counties, fill = NA, color = "white") +
+  geom_polygon(color = "black", fill = NA)
+
+ca_base + geom_point(data = CA_housing, size = .75, mapping = 
+                       aes(x = longitude, y = latitude, color = medianHouseValue)) + 
+  scale_color_gradient(low = "cyan", high = "dark blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+
+#CA_as_sf <- st_as_sf(CA_housing, coords = c('longitude', 'latitude'))
+#dist_matrix   <- st_distance(CA_as_sf, CA_as_sf)
+#diag(dist_matrix) <- NA
+
+
+CA_split = initial_split(CA_housing, prop = 0.8)
+CA_train = training(CA_split)
+CA_test = testing(CA_split)
+
+lm_start = lm(medianHouseValue ~ housingMedianAge + medianIncome
+              + rooms_per_household + bedrooms_per_household
+              + avg_household + population, data = CA_train)
+
+lm_step = step(lm_start, scope = ~(.)^2, trace = 0)
+
+modelr::rmse(lm_step, CA_test)
+
+ca.forest = randomForest(medianHouseValue ~ housingMedianAge + medianIncome
+                         + rooms_per_household + bedrooms_per_household
+                         + avg_household + population, mtry = 3, ntree = 200,
+                           data = CA_train, importance = TRUE)
+
+plot(ca.forest)
+round(modelr::rmse(ca.forest, CA_test),2)
+
+CA_housing$PredictedMedianValue = predict(ca.forest, CA_housing)
+
+CA_housing = CA_housing %>% mutate(Residuals = medianHouseValue - PredictedMedianValue)
+
+ca_base + geom_point(data = CA_housing, size = .75, mapping = 
+                       aes(x = longitude, y = latitude, color = PredictedMedianValue)) + 
+  scale_color_gradient(low = "cyan", high = "dark blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+ca_base + geom_point(data = CA_housing, size = 1, mapping = 
+                       aes(x = longitude, y = latitude, color = Residuals)) + 
+  scale_color_gradient2(low = "red", mid = "grey", high = "dark blue", labels = scales::label_comma()) + 
+  theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
