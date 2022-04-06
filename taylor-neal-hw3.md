@@ -55,7 +55,63 @@ significant at a 5% level.
 
 ## 2) Tree Modeling: Dengue Cases
 
-TBU
+Here we seek to build tree models utilizing three different
+methodologies (CART, random forests and gradient-boosted trees) in order
+to predict weekly dengue cases in San Juan, Puerto Rico and Iquitos,
+Peru based on the provided data set. Prior to any model building, the
+data was split in order to randomly reserve 20% of the observations for
+testing and comparing the performance of the three models. For each of
+the three methodologies, we model weekly dengue cases based on city (San
+Juan or Iquitos), season (spring, summer, fall, or winter), specific
+humidity, average diurnal temperature range, precipitation amount and
+maximum air temperature.
+
+<img src="taylor-neal-hw3_files/figure-gfm/CART-tree-1.png" style="display: block; margin: auto;" />
+
+Utilizing the CART methodology we greedily and recursively grow our tree
+to make deviance as small as possible (for this we used a complexity
+parameter of 0.0001 and minimum split of 5 observations). The resulting
+candidate trees were pruned back using cross validation taking the
+simplest tree within 1 standard error of the minimum cross-validated
+error. This tree (above) turns out to be very simple but it does just as
+well as the deeper trees at modeling our training set.
+
+<img src="taylor-neal-hw3_files/figure-gfm/partial-humidity-1.png" style="display: block; margin: auto;" />
+
+In the case of gradient-boosted trees, we assumed a Gaussian
+distribution. Additional parameters included an interaction depth of 4,
+500 trees, and a shrinkage factor of 0.03. This resulted in an
+improvement of RMSE (43.788) of the gradient-boosted tree model when
+compared to the final pruned CART tree (with RMSE of 44.125). However,
+the “out-of-the-box” random forest (with 500 trees and the square root
+of the number of variables used as the number of randomly sampled
+variables) had the lowest RMSE (43.658) when tested against the 20% of
+our observations which were withheld for model building purposes. The
+plot above shows the random forest’s partial dependence plot for
+specific humidity.
+
+<img src="taylor-neal-hw3_files/figure-gfm/partial-precipitation-1.png" style="display: block; margin: auto;" />
+
+The partial dependence plot for precipitation amount (above) has
+somewhat strange behavior for very low and very high amounts but this is
+likely due to the limited number of data points at those extremes.
+Overall, we see that precipitation amount appears to increase the
+expected number of dengue cases (likely because the standing water
+provides ample breeding grounds for mosquito). But at very high levels
+of precipitation, we might expect the number of dengue cases to fall
+because more people are inside avoiding the rain.
+
+<img src="taylor-neal-hw3_files/figure-gfm/partial-max-temp-1.png" style="display: block; margin: auto;" />
+
+The partial dependence plot for maximum air temperature (above) has odd
+behavior at very low temperatures (likely due to few observations), but
+if we ignore the area past the last tick mark on the left we find
+interesting partial dependence behavior. We see a near vertical line
+around 303K which appears to demarcate a temperature where that max
+temperature is hot enough for mosquitos to proliferate and spread more
+dengue cases. However, above this certain temperature, the maximum does
+not appear to add significantly to cases as it continues getting even
+hotter.
 
 ## 3) Predictive Model Building: Green Certification
 

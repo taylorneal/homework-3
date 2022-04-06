@@ -6,10 +6,14 @@ output: rmarkdown::github_document
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(rsample) 
+library(modelr)
+library(randomForest)
+library(gbm)
 #library(knitr)
-#library(rsample)
 #library(caret)
-#library(modelr)
 #library(glmnet)
 #library(lubridate)
 #library(ROCR)
@@ -43,7 +47,77 @@ In Table 4, the researchers are continuing to model total daily number of crimes
 
 ## 2) Tree Modeling: Dengue Cases
 
-TBU
+Here we seek to build tree models utilizing three different methodologies (CART, random forests and gradient-boosted trees) in order to predict weekly dengue cases in San Juan, Puerto Rico and Iquitos, Peru based on the provided data set. Prior to any model building, the data was split in order to randomly reserve 20% of the observations for testing and comparing the performance of the three models. For each of the three methodologies, we model weekly dengue cases based on city (San Juan or Iquitos), season (spring, summer, fall, or winter), specific humidity, average diurnal temperature range, precipitation amount and maximum air temperature.
+
+```{r CART-tree, echo = FALSE, fig.align = 'center'}
+
+dengue$city = as.factor(dengue$city)
+dengue$season = as.factor(dengue$season)
+dengue$total_cases = as.numeric(dengue$total_cases)
+dengue <- dengue[!is.na(dengue$tdtr_k),]
+dengue <- subset(dengue, select = c(-4, -5, -6, -7))
+
+dengue_split = initial_split(dengue, prop = 0.8)
+dengue_train = training(dengue_split)
+dengue_test = testing(dengue_split)
+
+prune_1se = function(my_tree) {
+  out = as.data.frame(my_tree$cptable)
+  thresh = min(out$xerror + out$xstd)
+  cp_opt = max(out$CP[out$xerror <= thresh])
+  prune(my_tree, cp = cp_opt)
+}
+
+load.tree = rpart(total_cases ~ city + season + tdtr_k + specific_humidity + 
+                    precipitation_amt + max_air_temp_k, 
+                  data = dengue_train, 
+                  control = rpart.control(cp = 0.0001, minsplit = 5))
+
+load.tree_pruned = prune_1se(load.tree)
+rpart.plot(load.tree_pruned, digits = -5, type = 4, extra = 1)
+
+```
+
+Utilizing the CART methodology we greedily and recursively grow our tree to make deviance as small as possible (for this we used a complexity parameter of 0.0001 and minimum split of 5 observations). The resulting candidate trees were pruned back using cross validation taking the simplest tree within 1 standard error of the minimum cross-validated error. This tree (above) turns out to be very simple but it does just as well as the deeper trees at modeling our training set. 
+
+```{r partial-humidity, echo = FALSE, fig.align = 'center'}
+
+load.forest = randomForest(total_cases ~ city + season + tdtr_k + 
+                             specific_humidity + precipitation_amt + 
+                             max_air_temp_k,
+                           data = dengue_train, importance = TRUE, 
+                           na.action = na.roughfix)
+
+boost = gbm(total_cases ~ city + season + tdtr_k + specific_humidity + 
+              precipitation_amt + max_air_temp_k, distribution = 'gaussian',
+            data = dengue_train, interaction.depth = 4, n.trees = 500, 
+            shrinkage = .03)
+
+CART_rmse = modelr::rmse(load.tree_pruned, dengue_test)
+forest_rmse = modelr::rmse(load.forest, dengue_test)
+boosted_rmse = modelr::rmse(boost, dengue_test)
+
+partialPlot(load.forest, dengue_test, 'specific_humidity', las = 1)
+
+```
+
+In the case of gradient-boosted trees, we assumed a Gaussian distribution. Additional parameters included an interaction depth of 4, 500 trees, and a shrinkage factor of 0.03. This resulted in an improvement of RMSE (`r round(boosted_rmse, 3)`) of the gradient-boosted tree model when compared to the final pruned CART tree (with RMSE of `r round(CART_rmse, 3)`). However, the "out-of-the-box" random forest (with 500 trees and the square root of the number of variables used as the number of randomly sampled variables) had the lowest RMSE (`r round(forest_rmse, 3)`) when tested against the 20% of our observations which were withheld for model building purposes. The plot above shows the random forest's partial dependence plot for specific humidity. 
+
+```{r partial-precipitation, echo = FALSE, fig.align = 'center'}
+
+partialPlot(load.forest, dengue_test, 'precipitation_amt', las = 1)
+
+```
+
+The partial dependence plot for precipitation amount (above) has somewhat strange behavior for very low and very high amounts but this is likely due to the limited number of data points at those extremes. Overall, we see that precipitation amount appears to increase the expected number of dengue cases (likely because the standing water provides ample breeding grounds for mosquito). But at very high levels of precipitation, we might expect the number of dengue cases to fall because more people are inside avoiding the rain.
+
+```{r partial-max-temp, echo = FALSE, fig.align = 'center'}
+
+partialPlot(load.forest, dengue_test, 'max_air_temp_k', las = 1)
+
+```
+
+The partial dependence plot for maximum air temperature (above) has odd behavior at very low temperatures (likely due to few observations), but if we ignore the area past the last tick mark on the left we find interesting partial dependence behavior. We see a near vertical line around 303K which appears to demarcate a temperature where that max temperature is hot enough for mosquitos to proliferate and spread more dengue cases. However, above this certain temperature, the maximum does not appear to add significantly to cases as it continues getting even hotter. 
 
 ## 3) Predictive Model Building: Green Certification
 
