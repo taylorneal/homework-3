@@ -5,6 +5,7 @@ library(rsample)
 library(modelr)
 library(randomForest)
 library(gbm)
+library(ggmap)
 
 
 ### Prob 2 ###
@@ -88,7 +89,7 @@ CA_housing = CA_housing %>%
          avg_household = population / households)
 
 #library(maps)
-library(ggmap)
+
 #library(sf)
 
 states = map_data("state")
@@ -146,3 +147,83 @@ ca_base + geom_point(data = CA_housing, size = 1, mapping =
                        aes(x = longitude, y = latitude, color = Residuals)) + 
   scale_color_gradient2(low = "red", mid = "grey", high = "dark blue", labels = scales::label_comma()) + 
   theme(legend.position = "right", legend.title = element_text(), legend.text = element_text(size = 8))
+
+### Prob 3 ###
+
+grn_build <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-3/master/data/greenbuildings.csv", 
+                      header = TRUE)
+
+grn_build = grn_build %>% 
+  mutate(class = 'C', net_gas_cost = net * Gas_Costs,
+         net_elec_cost = net * Electricity_Costs, 
+         rev_per_sqft = Rent * leasing_rate / 100)
+
+grn_build[grn_build$class_a == 1, 'class'] = 'A'
+grn_build[grn_build$class_b == 1, 'class'] = 'B'
+grn_build$class = factor(grn_build$class, levels = c('A', 'B', 'C'))
+#grn_build$cluster = factor(grn_build$cluster)
+
+#grn_build[rowSums(is.na(grn_build)) > 0, ]
+grn_build = grn_build[!is.na(grn_build$empl_gr),]
+grn_build = grn_build[!is.na(grn_build$rev_per_sqft),]
+grn_build = grn_build[grn_build$rev_per_sqft != 0,]
+
+grn_build = subset(grn_build, select = c(-1, -2, -5, -6, -10, -11, -12, -13, -15, -19, -21, -22)) # cluster is 2
+
+
+
+cv_rmse3 = 1:10
+cv_rmse4 = 1:10
+cv_rmse5 = 1:10
+cv_rmse4s = 1:10
+
+for (k in 1:10)
+{
+  grn_split = initial_split(grn_build, prop = 0.8)
+  grn_train = training(grn_split)
+  grn_test = testing(grn_split)
+  
+  grn.forest = randomForest(rev_per_sqft ~ size + empl_gr + stories + age + renovated + 
+                              green_rating + amenities + cd_total_07 + hd_total07 + 
+                              Precipitation + City_Market_Rent + class + net_gas_cost + 
+                              net_elec_cost, data = grn_train, mtry = 4, ntree = 500,
+                            importance = TRUE)
+  
+  cv_rmse4s[k] = modelr::rmse(grn.forest, grn_test)
+}
+
+mean(cv_rmse3)
+sd(cv_rmse3)
+mean(cv_rmse4)
+sd(cv_rmse4)
+mean(cv_rmse5)
+sd(cv_rmse5)
+mean(cv_rmse4s)
+sd(cv_rmse4s)
+
+##### real stuff
+grn_split = initial_split(grn_build, prop = 0.8)
+grn_train = training(grn_split)
+grn_test = testing(grn_split)
+
+grn.forest = randomForest(rev_per_sqft ~ size + empl_gr + stories + age + renovated + 
+                            green_rating + amenities + cd_total_07 + hd_total07 + 
+                            Precipitation + City_Market_Rent + class + net_gas_cost + 
+                            net_elec_cost, data = grn_train, mtry = 4, ntree = 500,
+                         importance = TRUE)
+
+plot(grn.forest)
+
+varImpPlot(grn.forest)
+
+partialPlot(grn.forest, grn_test, 'green_rating', las = 1)
+partialPlot(grn.forest, grn_test, 'amenities', las = 1)
+
+partialPlot(grn.forest, grn_test, 'size', las = 1)
+partialPlot(grn.forest, grn_test, 'stories', las = 1)
+
+yhat_test = predict(grn.forest, grn_test)
+plot(yhat_test, grn.forest$rev_per_sqft)
+
+
+modelr::rmse(grn.forest, grn_test)

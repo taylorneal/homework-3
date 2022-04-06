@@ -115,7 +115,85 @@ hotter.
 
 ## 3) Predictive Model Building: Green Certification
 
-TBU
+For this exercise, we sought to build the best model possible for
+predicting revenue per square foot per calendar year for commercial
+rental properties across the United States. The primary modeling focus
+utilized random forests. Prior to model building, multiple features were
+added to the data set in order to streamline the model building process.
+First, a revenue per square foot of lease space variable was added to
+the data (as this is the outcome of interest). Building class was also
+condensed to a single variable as a factor with three levels (A, B and
+C). The net indicator variable was interacted with gas and electricity
+costs so those would only be present as positive values in circumstances
+where renters are responsible for paying their own utilities. Finally,
+when missing values or zeros did not allow for the inclusion of revenue
+per square foot for an observation those few instances were removed.
+
+During the model building phase of analysis, 20% of the data set was
+withheld for testing and model validation. When selecting parameters for
+models and comparing out-of-sample performance, ten random train/test
+splits were run and average out-of-sample RMSE was compared to determine
+appropriate parameters and model setup. The final tree utilizes 14
+predictor variables, 500 trees and 4 randomly sampled variables per
+tree. As an additional note, attempts were made at utilizing stratified
+sampling to reduce the variability in out-of-sample RMSE test results
+(by stratifying across the clusters in the data set); however, this led
+to an increase in average RMSE (by about 7.6%) when comparing the
+additional 10 80%/20% train test splits.
+
+<img src="taylor-neal-hw3_files/figure-gfm/green-forest-error-plot-1.png" style="display: block; margin: auto;" />
+
+The error plot for our resulting random forest model (above), indicates
+that 500 trees is enough to realize all potential gains from larger
+forests. This was the case for all of the iterations of parameters and
+model specifications attempted. Note that for this single train/test
+split, the out-of-sample estimate of RMSE was 7.48.
+
+<img src="taylor-neal-hw3_files/figure-gfm/var-importance-plot-1.png" style="display: block; margin: auto;" />
+
+The variable importance plot (above), lists all of our model’s predictor
+variables in order of importance. The chart on the left displays an
+estimate of the percentage increase in mean squared error that would
+result from excluding said variable. The most important predictors
+(`age`, `stories`, `size`, and `City_Market_Rent`) all make sense as the
+driving factors of revenue per square foot per calendar year.
+`net_elec_cost` and `net_gas_cost` impact relatively few of the
+observations so those being at the bottom of both charts is not
+particularly surprising. We do also find that `green_rating` also
+appears near the very bottom of both importance plots which would seem
+to indicate they aren’t carrying a lot of weight with regard to how much
+revenue a commercial building can bring in, but next we will examine its
+partial dependence plot to investigate further.
+
+<img src="taylor-neal-hw3_files/figure-gfm/green-amenities-partials-1.png" width="50%" /><img src="taylor-neal-hw3_files/figure-gfm/green-amenities-partials-2.png" width="50%" />
+
+In the plots above, we see the partial dependence for both
+`green_rating` and also `amenities` (included in order to compare our
+predictor of interest to another indicator variable). The green rating
+status (either LEED or Energystar certified) is expected to increase
+revenue per square foot per calendar year by about $1. This does not
+seem to be a particularly large impact (not surprising after observing
+the variable importance plots earlier). However, it does appear to be a
+slightly larger revenue expectation increase compared to a building
+including at lease one amenity on site (bank, convenience store, dry
+cleaner, restaurant, retail shops or fitness center). Green
+certification is not leading to a particularly large increase in average
+rental income per square foot (all else equal), so we will take a look
+at two more partial dependence plots before wrapping up so we can
+visualize what the variables of greater importance look like.
+
+<img src="taylor-neal-hw3_files/figure-gfm/size-stories-partials-1.png" width="50%" /><img src="taylor-neal-hw3_files/figure-gfm/size-stories-partials-2.png" width="50%" />
+
+The partial dependence plots above (for size/square footage and floors)
+clearly indicates that one of the most important factors that can drive
+companies to pay more for rental space is being in the biggest, tallest
+buildings. We can see by comparing the y-axis scales here to those for
+green rating and amenities previously that building size (generally)
+increases expected rental revenue on a square foot basis and drives a
+lot of the difference in rental rates for different buildings in the
+United States. Companies are likely paying more to be in the more
+impressive buildings as a status symbol for their various firms and
+green status makes a small little impact in comparison.
 
 ## 4) Predictive Model Building: California Housing
 
@@ -143,10 +221,10 @@ forest with 200 trees and 3 randomly sampled variables per tree.
 `medianHouseValue` is modeled based on `housingMedianAge`,
 `medianIncome`, `rooms_per_household`, `bedrooms_per_household`,
 `avg_household`, and `population`. The resulting model had an
-out-of-sample RMSE of 63,790. For benchmarking, a step-wise selected
+out-of-sample RMSE of 64,883. For benchmarking, a step-wise selected
 linear model was also fit (with the same explanatory variables as above
 for the random forest and in the space of all pairwise interactions).
-This resulted in an out-of-sample RMSE of 77,637.
+This resulted in an out-of-sample RMSE of 77,257.45.
 
 <img src="taylor-neal-hw3_files/figure-gfm/residuals-map-1.png" style="display: block; margin: auto;" />
 
